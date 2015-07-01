@@ -1,16 +1,14 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"sync"
 	"strings"
+	"sync"
 )
 
 type LottoResults struct {
@@ -41,44 +39,62 @@ func main() {
 	if _, err := os.Stat("results"); os.IsNotExist(err) {
 		os.Mkdir("."+string(filepath.Separator)+"results", 0777)
 	}
-	runtime.GOMAXPROCS(4)
-	wg.Add(8);
-	go StartScrape("http://pcso-lotto-results-and-statistics.webnatin.com/6-55results.asp", CLR_0, "results/6-55.json", wg )
-	go StartScrape("http://pcso-lotto-results-and-statistics.webnatin.com/6-49results.asp", CLR_R, "results/6-49.json", wg )
-	go StartScrape("http://pcso-lotto-results-and-statistics.webnatin.com/6-45results.asp", CLR_G, "results/6-45.json", wg )
-	go StartScrape("http://pcso-lotto-results-and-statistics.webnatin.com/6-42results.asp", CLR_Y, "results/6-42.json", wg )
-	go StartScrape("http://pcso-lotto-results-and-statistics.webnatin.com/6-dresults.asp", CLR_B, "results/6-d.json", wg )
-	go StartScrape("http://pcso-lotto-results-and-statistics.webnatin.com/4-dresults.asp", CLR_M, "results/4-d.json", wg )
-	go StartScrape("http://pcso-lotto-results-and-statistics.webnatin.com/3-dresults.asp", CLR_C, "results/3-d.json", wg )
-	go StartScrape("http://pcso-lotto-results-and-statistics.webnatin.com/2-dresults.asp", CLR_W, "results/2-d.json", wg )
+	runtime.GOMAXPROCS(8)
+	wg.Add(8)
+	go StartScrape("6-55results.asp", CLR_0, "results/6-55.csv", wg)
+	go StartScrape("6-49results.asp", CLR_R, "results/6-49.csv", wg)
+	go StartScrape("6-45results.asp", CLR_G, "results/6-45.csv", wg)
+	go StartScrape("6-42results.asp", CLR_Y, "results/6-42.csv", wg)
+	go StartScrape("6-dresults.asp", CLR_B, "results/6-d.csv", wg)
+	go StartScrape("4-dresults.asp", CLR_M, "results/4-d.csv", wg)
+	go StartScrape("3-dresults.asp", CLR_C, "results/3-d.csv", wg)
+	go StartScrape("2-dresults.asp", CLR_W, "results/2-d.csv", wg)
 	wg.Wait()
 }
 
-func StartScrape(url string, color string, filename string,wg *sync.WaitGroup ) {
+func StartScrape(path string, color string, filename string, wg *sync.WaitGroup) {
 	fmt.Println(color + "Creating " + filename + CLR_N)
-	var item = LottoItem{Game: "", Combination: "", Date: "", Jackpot: "", Winners: ""}
-	var results = LottoResults{}
-	doc, queryError := goquery.NewDocument(url)
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+	doc, queryError := goquery.NewDocument("http://pcso-lotto-results-and-statistics.webnatin.com/" + path)
 	if queryError != nil {
 		fmt.Println("\nError fetching data..\n" + queryError.Error())
 		return
 	}
 	insertedCounter := 0
+
 	doc.Find("table tr").Each(func(i int, s *goquery.Selection) {
-		item.Game = s.Find("td:nth-child(1)").Text()
-		item.Date = s.Find("td:nth-child(3)").Text()
-		item.Combination = s.Find("td:nth-child(4)").Text()
-		item.Jackpot = s.Find("td:nth-child(5)").Text()
-		item.Winners = s.Find("td:nth-child(6)").Text()
-		if strings.Trim(item.Game," ") == "DRAW" {
-			return
-		}
-		results.Results = append(results.Results, item)
+		game := ""
+		date := ""
+		jackpot := ""
+		winners := ""
+		combination := ""
+
+		s.Find("td").Each(func(j int, t *goquery.Selection) {
+			if j == 0 {
+				game = strings.TrimSpace(t.Text())
+			}
+			if j == 2 {
+				date = strings.TrimSpace(t.Text())
+			}
+			if j == 3 {
+				combination = strings.TrimSpace(t.Text())
+			}
+			if j == 4 {
+				jackpot = strings.TrimSpace(t.Text())
+			}
+			if j == 5 {
+				winners = strings.TrimSpace(t.Text())
+			}
+		})
+		f.WriteString("\"" + game + "\",\"" + date + "\",\"" + combination + "\",\"" + jackpot + "\",\"" + winners + "\"\n")
 		fmt.Print(color + "●" + CLR_N)
 		insertedCounter++
 	})
-	jsonResults, _ := json.Marshal(results)
-	ioutil.WriteFile(filename, []byte(jsonResults), 0644)
-	fmt.Println(color + "\nCreated json file :" + filename + " -> " + strconv.Itoa(insertedCounter) + " records " + CLR_N)
+	f.Close()
+	fmt.Println(color + "\nCreated csv file :" + filename + " -> " + strconv.Itoa(insertedCounter) + " records " + CLR_N)
 	wg.Done()
 }
