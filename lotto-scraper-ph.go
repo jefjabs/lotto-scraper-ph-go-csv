@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"strings"
 )
 
 type LottoResults struct {
@@ -64,23 +65,14 @@ func StartScrape(url string, color string, filename string,wg *sync.WaitGroup ) 
 	}
 	insertedCounter := 0
 	doc.Find("table tr").Each(func(i int, s *goquery.Selection) {
-		s.Find("td").Each(func(j int, t *goquery.Selection) {
-			if j == 0 {
-				item.Game = t.Text()
-			}
-			if j == 2 {
-				item.Date = t.Text()
-			}
-			if j == 3 {
-				item.Combination = t.Text()
-			}
-			if j == 4 {
-				item.Jackpot = t.Text()
-			}
-			if j == 5 {
-				item.Winners = t.Text()
-			}
-		})
+		item.Game = s.Find("td:nth-child(1)").Text()
+		item.Date = s.Find("td:nth-child(3)").Text()
+		item.Combination = s.Find("td:nth-child(4)").Text()
+		item.Jackpot = s.Find("td:nth-child(5)").Text()
+		item.Winners = s.Find("td:nth-child(6)").Text()
+		if strings.Trim(item.Game," ") == "DRAW" {
+			return
+		}
 		results.Results = append(results.Results, item)
 		fmt.Print(color + "●" + CLR_N)
 		insertedCounter++
